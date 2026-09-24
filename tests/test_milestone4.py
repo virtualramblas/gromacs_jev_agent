@@ -104,11 +104,11 @@ def run_tests():
 
 
     print("\n=== Step 4: Local SLM System Prompt Inspection ===")
-    # Inspect the system prompt inside the agent to verify our GROMACS-GPT system instructions are packed
-    # Smolagents stores system prompts inside the agent's default prompt templates or system_prompt
-    agent_instructions = gromacs_agent.agent.system_prompt
-    assert "GROMACS-GPT" in agent_instructions
-    assert "NEVER skip a step" in agent_instructions
+    # Assert directly against the orchestrator's stored system prompt
+    agent_instructions = gromacs_agent.system_prompt
+    
+    assert "GROMACS-GPT" in agent_instructions, "System prompt is missing 'GROMACS-GPT' framing"
+    assert "NEVER skip a step" in agent_instructions, "System prompt is missing pipeline constraints"
     print("✓ Agent cognitive framing is verified and contains standard pipeline constraints.")
 
     print("\nMilestone 4 test suite execution successful!")
