@@ -282,3 +282,16 @@ class StateManager:
             ],
             "last_error": self.data["errors"][-1] if self.data["errors"] else None
         }
+
+    def reset(self):
+        """Wipes current registry data and resets to initial stage."""
+        self.data = {
+            "simulation_id": self.simulation_id,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+            "current_step": self.STAGES_ORDER[0],
+            "status": "initialized",
+            "artifacts": {},
+            "errors": []
+        }
+        self.save()

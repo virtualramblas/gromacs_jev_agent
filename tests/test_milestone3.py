@@ -1,13 +1,22 @@
 """Verification test suite for Milestone 3 State Manager and MDP Generator."""
 
 import json
+import shutil
 from pathlib import Path
 from src.state_manager import MDPGenerator, StateManager
 
 
+def setup_clean_dir(test_dir: Path):
+    """Ensures test isolation by removing leftover artifacts from previous runs."""
+    if test_dir.exists():
+        shutil.rmtree(test_dir)
+    test_dir.mkdir(parents=True, exist_ok=True)
+
+
 def run_tests():
     test_dir = Path("./test_workdir_m3")
-    test_dir.mkdir(parents=True, exist_ok=True)
+    # Clean the sandbox directory before testing
+    setup_clean_dir(test_dir)
 
     print("=== Step 1: Testing MDPGenerator Synthesis & Overrides ===")
     gen = MDPGenerator()
@@ -23,8 +32,8 @@ def run_tests():
     print("\n=== Step 2: Testing StateManager Lifecycle & Tracking ===")
     sm = StateManager(workdir=str(test_dir), simulation_id="test_run_101")
     
-    # Assert initial state
-    assert sm.data["current_step"] == "pdb2gmx"
+    # Assert initial state on fresh registry
+    assert sm.data["current_step"] == "pdb2gmx", f"Expected 'pdb2gmx', got '{sm.data['current_step']}'"
     assert sm.data["status"] == "initialized"
     print("✓ State initialized at step 'pdb2gmx'.")
 
