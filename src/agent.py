@@ -5,6 +5,7 @@ SLM for high-level pipeline orchestration and error recovery.
 """
 
 import json
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 # Top-level imports compatible with latest smolagents and litellm versions
