@@ -152,6 +152,63 @@ class RunMdrunTool(GromacsPipelineTool):
         self.state.record_step_result(step_name, result.success, result.created_outputs, None if result.success else result.stderr_tail)
         return json.dumps(result.to_slm_payload())
 
+class PlotAnalysisTool(GromacsPipelineTool):
+    name = "plot_analysis"
+    description = (
+        "Parses a GROMACS .xvg file (e.g., 'rmsd.xvg'), generates a PNG plot, "
+        "and calculates mean, min, and max values for scientific interpretation."
+    )
+    inputs = {
+        "analysis_type": {
+            "type": "string",
+            "description": "Type of analysis: 'rmsd' or 'gyrate'."
+        }
+    }
+    output_type = "string"
+
+    def forward(self, analysis_type: str = "rmsd") -> str:
+        # Resolve target XVG file from workspace
+        xvg_filename = f"{analysis_type}.xvg"
+        xvg_file = self.state.workdir / xvg_filename
+
+        if not xvg_file.exists():
+            return json.dumps({
+                "status": "failed",
+                "error": f"Required data file '{xvg_filename}' does not exist in workspace."
+            })
+
+        title_map = {
+            "rmsd": ("Backbone RMSD Over Time", "Time (ns)", "RMSD (nm)"),
+            "gyrate": ("Radius of Gyration (Compactness)", "Time (ns)", "Rg (nm)")
+        }
+        title, xlabel, ylabel = title_map.get(analysis_type.lower(), ("Analysis Metric", "Time (ns)", "Value"))
+
+        result = self.tools.generate_xvg_plot(
+            xvg_path=str(xvg_file),
+            output_png_name=f"{analysis_type}_plot.png",
+            title=title,
+            xlabel=xlabel,
+            ylabel=ylabel
+        )
+
+        if result["success"]:
+            # Record artifact in state registry
+            self.state.record_step_result(
+                step_name=f"plot_{analysis_type}",
+                success=True,
+                output_files={"png": result["plot_path"]}
+            )
+            return json.dumps({
+                "status": "success",
+                "plot_saved_to": result["plot_path"],
+                "metrics": result["summary"]
+            })
+        else:
+            return json.dumps({
+                "status": "failed",
+                "error": result["error"]
+            })
+
 # =====================================================================
 # 2. Main Agent Orchestrator with Self-Healing
 # =====================================================================
@@ -171,6 +228,7 @@ class GromacsAgent:
             RunGenionTool(self.tool_library, self.state, self.mdp_gen),
             RunGromppTool(self.tool_library, self.state, self.mdp_gen),
             RunMdrunTool(self.tool_library, self.state, self.mdp_gen),
+            PlotAnalysisTool(self.tool_library, self.state, self.mdp_gen)
         ]
         
         self.system_prompt = f"""You are GROMACS-GPT, an expert AI that automates MD simulations. Your goal is to run the GROMACS workflow step-by-step. The required sequence is: {', '.join(self.state.STAGES_ORDER)}.
@@ -178,7 +236,8 @@ class GromacsAgent:
         1. Read the 'CURRENT STATE' to know the current step.
         2. Execute tools strictly in order. NEVER skip a step.
         3. For 'em', 'nvt', 'npt', and 'md', you must call 'run_grompp' BEFORE 'run_mdrun'.
-        4. If a step succeeds, call the next tool. If it fails, STOP and report the error."""
+        4. If a step succeeds, call the next tool. If it fails, STOP and report the error.
+        5. When production 'md' completes, call 'plot_analysis' with analysis_type='rmsd' to produce the final stability report and figure."""
 
         model = LiteLLMModel(model_id=model_id, system_prompt=self.system_prompt)
         self.agent = CodeAgent(tools=tools, model=model, max_steps=20) # Increased max_steps for full pipeline

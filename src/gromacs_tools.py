@@ -6,6 +6,9 @@ Wraps all standard GROMACS pipeline commands into non-interactive JevJob tasks.
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
+import matplotlib
+matplotlib.use("Agg")  # Headless backend safe for headless servers, Docker, & Colab
+import matplotlib.pyplot as plt
 
 from src.simple_jev import SimpleJevEngine, HardwareConfig, JevJobResult
 
@@ -233,3 +236,65 @@ class GromacsToolLibrary:
             command=cmd,
             expected_outputs=expected
         )
+
+    def generate_xvg_plot(
+        self,
+        xvg_path: str,
+        output_png_name: str,
+        title: str = "Trajectory Analysis",
+        xlabel: str = "Time (ns)",
+        ylabel: str = "Value"
+    ) -> Dict[str, Any]:
+        """
+        Parses a GROMACS .xvg data file, computes basic summary metrics,
+        and saves a publication-quality plot as a PNG image.
+        """
+        xvg_file = Path(xvg_path).resolve()
+        if not xvg_file.exists():
+            return {"success": False, "error": f"XVG file not found: {xvg_path}"}
+
+        time_vals, metric_vals = [], []
+        try:
+            with open(xvg_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith(("@", "#")):
+                        continue  # Skip Grace comment headers
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        time_vals.append(float(parts[0]))
+                        metric_vals.append(float(parts[1]))
+
+            if not time_vals:
+                return {"success": False, "error": "No data found in XVG file."}
+
+            # Generate and format plot
+            plt.figure(figsize=(9, 4.5), dpi=300)
+            plt.plot(time_vals, metric_vals, color="#1f77b4", linewidth=1.5, label="Simulation Data")
+            plt.title(title, fontsize=12, fontweight="bold")
+            plt.xlabel(xlabel, fontsize=10)
+            plt.ylabel(ylabel, fontsize=10)
+            plt.grid(True, linestyle="--", alpha=0.6)
+            plt.tight_layout()
+
+            output_plot_path = self.engine.base_workdir / output_png_name
+            plt.savefig(output_plot_path)
+            plt.close()
+
+            # Compute summary statistics to feed back to the local SLM
+            mean_val = sum(metric_vals) / len(metric_vals)
+            max_val = max(metric_vals)
+            min_val = min(metric_vals)
+
+            return {
+                "success": True,
+                "plot_path": str(output_plot_path),
+                "summary": {
+                    "data_points": len(time_vals),
+                    "mean": round(mean_val, 4),
+                    "min": round(min_val, 4),
+                    "max": round(max_val, 4)
+                }
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
