@@ -161,14 +161,16 @@ class PlotAnalysisTool(GromacsPipelineTool):
     inputs = {
         "analysis_type": {
             "type": "string",
-            "description": "Type of analysis: 'rmsd' or 'gyrate'."
+            "description": "Type of analysis: 'rmsd' or 'gyrate'. Defaults to 'rmsd'.",
+            "nullable": True,  # <-- Added this line to satisfy smolagents' strict validation
         }
     }
     output_type = "string"
 
-    def forward(self, analysis_type: str = "rmsd") -> str:
-        # Resolve target XVG file from workspace
-        xvg_filename = f"{analysis_type}.xvg"
+    def forward(self, analysis_type: Optional[str] = "rmsd") -> str:
+        # Fallback to default value if explicitly passed as None or omitted
+        target_type = analysis_type or "rmsd"
+        xvg_filename = f"{target_type}.xvg"
         xvg_file = self.state.workdir / xvg_filename
 
         if not xvg_file.exists():
@@ -181,11 +183,11 @@ class PlotAnalysisTool(GromacsPipelineTool):
             "rmsd": ("Backbone RMSD Over Time", "Time (ns)", "RMSD (nm)"),
             "gyrate": ("Radius of Gyration (Compactness)", "Time (ns)", "Rg (nm)")
         }
-        title, xlabel, ylabel = title_map.get(analysis_type.lower(), ("Analysis Metric", "Time (ns)", "Value"))
+        title, xlabel, ylabel = title_map.get(target_type.lower(), ("Analysis Metric", "Time (ns)", "Value"))
 
         result = self.tools.generate_xvg_plot(
             xvg_path=str(xvg_file),
-            output_png_name=f"{analysis_type}_plot.png",
+            output_png_name=f"{target_type}_plot.png",
             title=title,
             xlabel=xlabel,
             ylabel=ylabel
@@ -194,7 +196,7 @@ class PlotAnalysisTool(GromacsPipelineTool):
         if result["success"]:
             # Record artifact in state registry
             self.state.record_step_result(
-                step_name=f"plot_{analysis_type}",
+                step_name=f"plot_{target_type}",
                 success=True,
                 output_files={"png": result["plot_path"]}
             )
