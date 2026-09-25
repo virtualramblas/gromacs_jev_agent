@@ -159,50 +159,50 @@ class GromacsAgent:
         model = LiteLLMModel(model_id=model_id, system_prompt=self.system_prompt)
         self.agent = CodeAgent(tools=tools, model=model, max_steps=20) # Increased max_steps for full pipeline
 
-def run_pipeline(self, pdb_file: str):
-        """Starts and runs the full agentic pipeline."""
-        print(f"🚀 Starting GROMACS pipeline for {pdb_file}...")
-        self.state.data["input_pdb"] = pdb_file
-        self.state.save()
+    def run_pipeline(self, pdb_file: str):
+            """Starts and runs the full agentic pipeline."""
+            print(f"🚀 Starting GROMACS pipeline for {pdb_file}...")
+            self.state.data["input_pdb"] = pdb_file
+            self.state.save()
 
-        while self.state.data["status"] not in ["completed", "halted"]:
-            context = self.state.get_slm_context()
-            user_prompt = (
-                f"CURRENT STATE: {json.dumps(context, indent=2)}\n\n"
-                f"Based on the state, call the single next tool required to advance the pipeline."
-            )
-            
-            print(f"\n--- Agent Turn (Current Step: {context['current_step']}) ---")
-            try:
-                response = self.agent.run(user_prompt)
+            while self.state.data["status"] not in ["completed", "halted"]:
+                context = self.state.get_slm_context()
+                user_prompt = (
+                    f"CURRENT STATE: {json.dumps(context, indent=2)}\n\n"
+                    f"Based on the state, call the single next tool required to advance the pipeline."
+                )
                 
-                # Check if response is a JSON string from a tool
-                if isinstance(response, str):
-                    try:
-                        response_data = json.loads(response)
-                    except Exception:
-                        response_data = {"raw_output": response}
-                elif isinstance(response, dict):
-                    response_data = response
-                else:
-                    response_data = {"raw_output": str(response)}
+                print(f"\n--- Agent Turn (Current Step: {context['current_step']}) ---")
+                try:
+                    response = self.agent.run(user_prompt)
+                    
+                    # Check if response is a JSON string from a tool
+                    if isinstance(response, str):
+                        try:
+                            response_data = json.loads(response)
+                        except Exception:
+                            response_data = {"raw_output": response}
+                    elif isinstance(response, dict):
+                        response_data = response
+                    else:
+                        response_data = {"raw_output": str(response)}
 
-                print(f"Agent observation: {response_data}")
+                    print(f"Agent observation: {response_data}")
 
-                if response_data.get("status") == "failed" or response_data.get("success") is False:
-                    self.diagnose_and_halt(response_data)
+                    if response_data.get("status") == "failed" or response_data.get("success") is False:
+                        self.diagnose_and_halt(response_data)
+                        break
+
+                except Exception as e:
+                    print(f"🚨 Agent execution loop failed unexpectedly: {e}")
+                    self.diagnose_and_halt({"error": str(e)})
                     break
-
-            except Exception as e:
-                print(f"🚨 Agent execution loop failed unexpectedly: {e}")
-                self.diagnose_and_halt({"error": str(e)})
-                break
-        
-        print(f"\n✅ Pipeline finished with status: {self.state.data['status']}")
-        if self.state.data['status'] == 'halted':
-            errors = self.state.data.get('errors', [])
-            final_err = errors[-1] if errors else "Pipeline halted with unknown error"
-            print(f"🚨 Final Error: {final_err}")
+            
+            print(f"\n✅ Pipeline finished with status: {self.state.data['status']}")
+            if self.state.data['status'] == 'halted':
+                errors = self.state.data.get('errors', [])
+                final_err = errors[-1] if errors else "Pipeline halted with unknown error"
+                print(f"🚨 Final Error: {final_err}")
             
     def diagnose_and_halt(self, failure_payload: dict):
         """Uses the SLM to get a human-readable diagnosis of a failure."""
