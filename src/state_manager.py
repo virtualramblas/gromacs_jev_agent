@@ -275,6 +275,7 @@ class StateManager:
         """Returns concise state summary payload for local SLM reasoning."""
         return {
             "simulation_id": self.data["simulation_id"],
+            "input_pdb": self.data.get("input_pdb"),  # <-- Added here!
             "current_step": self.data["current_step"],
             "status": self.data["status"],
             "completed_steps": [
@@ -282,6 +283,7 @@ class StateManager:
             ],
             "last_error": self.data["errors"][-1] if self.data["errors"] else None
         }
+
 
     def reset(self):
         """Wipes current registry data and resets to initial stage."""

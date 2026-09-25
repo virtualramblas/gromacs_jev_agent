@@ -33,14 +33,37 @@ class GromacsPipelineTool(Tool):
         self.mdp_gen = mdp_generator or MDPGenerator()
 
 class RunPdb2gmxTool(GromacsPipelineTool):
-    name: str = "run_pdb2gmx"
-    description: str = "Generates topology (.top) and coordinate (.gro) files from a PDB. This is the first step."
-    inputs: Dict[str, Any] = {"pdb_file": {"type": "string", "description": "Path to the input .pdb file."}}
-    output_type: str = "string"
+    name = "run_pdb2gmx"
+    description = (
+        "Generates GROMACS topology (.top) and coordinate (.gro) files from the input PDB file. "
+        "This is the first step of the pipeline. Requires no arguments."
+    )
+    inputs = {
+        "pdb_file": {
+            "type": "string",
+            "description": "Optional override path to .pdb file. Defaults to the simulation's registered PDB.",
+            "nullable": True
+        }
+    }
+    output_type = "string"
 
-    def forward(self, pdb_file: str) -> str:
-        result = self.tools.run_pdb2gmx(pdb_file=pdb_file)
-        self.state.record_step_result(result.job_id, result.success, result.created_outputs, None if result.success else result.stderr_tail)
+    def forward(self, pdb_file: Optional[str] = None) -> str:
+        # Retrieve registered PDB from StateManager if not explicitly provided
+        target_pdb = pdb_file or self.state.data.get("input_pdb")
+        
+        if not target_pdb or not Path(target_pdb).exists():
+            return json.dumps({
+                "status": "failed",
+                "error": f"PDB input file '{target_pdb}' not found. Check simulation setup."
+            })
+
+        result = self.tools.run_pdb2gmx(pdb_file=target_pdb)
+        self.state.record_step_result(
+            step_name=result.job_id,
+            success=result.success,
+            output_files=result.created_outputs,
+            error_msg=None if result.success else result.stderr_tail
+        )
         return json.dumps(result.to_slm_payload())
 
 class RunEditconfTool(GromacsPipelineTool):
