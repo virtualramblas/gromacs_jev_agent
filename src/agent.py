@@ -21,11 +21,16 @@ from src.state_manager import StateManager, MDPGenerator
 
 class GromacsPipelineTool(Tool):
     """Base tool to provide shared access to the GROMACS tool library and state."""
-    def __init__(self, tool_library: GromacsToolLibrary, state_manager: StateManager, mdp_generator: MDPGenerator):
+    def __init__(
+        self,
+        tool_library: GromacsToolLibrary,
+        state_manager: StateManager,
+        mdp_generator: Optional[MDPGenerator] = None
+    ):
         super().__init__()
         self.tools = tool_library
         self.state = state_manager
-        self.mdp_gen = mdp_generator
+        self.mdp_gen = mdp_generator or MDPGenerator()
 
 class RunPdb2gmxTool(GromacsPipelineTool):
     name: str = "run_pdb2gmx"

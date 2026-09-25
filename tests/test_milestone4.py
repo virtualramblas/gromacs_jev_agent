@@ -57,7 +57,6 @@ def run_tests():
     print("=== Step 2: Testing SmolAgent Tool Interfacing (Mocked Execution) ===")
     
     # Mock the GROMACS Tool Library to return immediate mock JevJobResults
-    # This prevents the test from actually trying to invoke the 'gmx' shell command
     mock_library = MagicMock(spec=GromacsToolLibrary)
     
     # Mock pdb2gmx result
@@ -73,9 +72,9 @@ def run_tests():
         created_outputs={"gro": str(test_dir / "processed.gro"), "top": str(test_dir / "topol.top")}
     )
 
-    # Re-wire tools in the agent with our mock library
-    pdb2gmx_tool = RunPdb2gmxTool(mock_library, gromacs_agent.state)
-    editconf_tool = RunEditconfTool(mock_library, gromacs_agent.state)
+    # Pass mdp_generator to comply with updated constructor
+    pdb2gmx_tool = RunPdb2gmxTool(mock_library, gromacs_agent.state, gromacs_agent.mdp_gen)
+    editconf_tool = RunEditconfTool(mock_library, gromacs_agent.state, gromacs_agent.mdp_gen)
 
     # Simulate the PDB file registration
     gromacs_agent.state.data["input_pdb"] = str(pdb_path)
@@ -94,7 +93,7 @@ def run_tests():
     print("\n=== Step 3: Verifying State Constraints & Missing Prerequisites ===")
     # Create a fresh registry state where previous steps didn't run, and run editconf
     broken_state = StateManager(workdir=str(test_dir / "broken"), simulation_id="broken_run")
-    broken_editconf_tool = RunEditconfTool(mock_library, broken_state)
+    broken_editconf_tool = RunEditconfTool(mock_library, broken_state, gromacs_agent.mdp_gen)
     
     err_response_json = broken_editconf_tool.forward()
     err_response = json.loads(err_response_json)
@@ -104,11 +103,10 @@ def run_tests():
 
 
     print("\n=== Step 4: Local SLM System Prompt Inspection ===")
-    # Assert directly against the orchestrator's stored system prompt
+    # Assert against the class attribute saved in GromacsAgent
     agent_instructions = gromacs_agent.system_prompt
-    
-    assert "GROMACS-GPT" in agent_instructions, "System prompt is missing 'GROMACS-GPT' framing"
-    assert "NEVER skip a step" in agent_instructions, "System prompt is missing pipeline constraints"
+    assert "GROMACS-GPT" in agent_instructions
+    assert "NEVER skip a step" in agent_instructions
     print("✓ Agent cognitive framing is verified and contains standard pipeline constraints.")
 
     print("\nMilestone 4 test suite execution successful!")
